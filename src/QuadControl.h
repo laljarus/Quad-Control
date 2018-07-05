@@ -48,4 +48,7 @@ public:
 
   // integral control
   float integratedAltitudeError;
+
+  // physical properties
+  float Mass;
 };
