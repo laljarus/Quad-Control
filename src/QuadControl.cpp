@@ -79,10 +79,10 @@ VehicleCommand QuadControl::GenerateMotorCommands(float collThrustCmd, V3F momen
 	float q_bar = momentCmd.y/l;
 	float r_bar = momentCmd.z/kappa;	
 
-  cmd.desiredThrustsN[0] = (c_bar+p_bar+q_bar+r_bar) / 4.f; // front left
+  cmd.desiredThrustsN[0] = (c_bar + p_bar + q_bar + r_bar) / 4.f; // front left
   cmd.desiredThrustsN[1] = (c_bar - p_bar + q_bar - r_bar)/ 4.f; // front right
-  cmd.desiredThrustsN[2] = (c_bar - p_bar - q_bar + r_bar) / 4.f; // rear left
-  cmd.desiredThrustsN[3] = (c_bar + p_bar - q_bar - r_bar) / 4.f; // rear right
+  cmd.desiredThrustsN[2] = (c_bar + p_bar - q_bar - r_bar) / 4.f; // rear left
+  cmd.desiredThrustsN[3] = (c_bar - p_bar - q_bar + r_bar) / 4.f; // rear right
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -105,10 +105,13 @@ V3F QuadControl::BodyRateControl(V3F pqrCmd, V3F pqr)
 	V3F momentCmd; 
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
+	V3F inertia;
+	inertia.x = Ixx;
+	inertia.y = Iyy;
+	inertia.z = Izz;
 
-	momentCmd.x = (pqrCmd.x - pqr.x)*kpPQR.x*Ixx;
-	momentCmd.y = (pqrCmd.y - pqr.y)*kpPQR.y*Iyy;
-	momentCmd.z = (pqrCmd.z - pqr.z)*kpPQR.z*Izz;  
+	momentCmd = (pqrCmd - pqr)*kpPQR*inertia;
+	
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
@@ -138,9 +141,9 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
   Mat3x3F R = attitude.RotationMatrix_IwrtB();
 
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
-  float c = -collThrustCmd / mass;
-  float b_x_c = accelCmd.x / c;
-  float b_y_c = accelCmd.y / c;  
+  float c = -collThrustCmd / mass; // -1 is used to convert positive thrust to NED coordinates c - acceleration in z direction
+  float b_x_c = CONSTRAIN(accelCmd.x / c,-maxTiltAngle, maxTiltAngle);
+  float b_y_c = CONSTRAIN(accelCmd.y / c, -maxTiltAngle, maxTiltAngle);
 
   float b_x_a = R(0,2);
   float b_y_a = R(1, 2);
@@ -157,9 +160,6 @@ V3F QuadControl::RollPitchControl(V3F accelCmd, Quaternion<float> attitude, floa
   pqrCmd.y = (R(1, 1)*b_dot_x - R(0, 1)*b_dot_y) / R(2, 2);
   pqrCmd.z = 0; 
   
-  pqrCmd.x = CONSTRAIN(pqrCmd.x, -maxTiltAngle, maxTiltAngle);
-  pqrCmd.y = CONSTRAIN(pqrCmd.y, -maxTiltAngle, maxTiltAngle);
-
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
   return pqrCmd;
@@ -192,11 +192,11 @@ float QuadControl::AltitudeControl(float posZCmd, float velZCmd, float posZ, flo
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
   integratedAltitudeError += (posZCmd - posZ)*dt;
   float acceleration_cmd = (posZCmd - posZ)*kpPosZ + (velZCmd - velZ)*kpVelZ + accelZCmd + KiPosZ*integratedAltitudeError;
-  thrust = ((float)CONST_GRAVITY - acceleration_cmd)/R(2, 2);
-  thrust = CONSTRAIN(thrust, -maxAscentRate/dt, maxDescentRate/dt)*mass;
+  thrust = (acceleration_cmd - (float)CONST_GRAVITY )/R(2, 2);
+  thrust = -mass*CONSTRAIN(thrust, -maxAscentRate/dt, maxDescentRate/dt); // -1 is multiplied because collective thrust command is only positive
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
-  
+
   return thrust;
 }
 
@@ -257,20 +257,30 @@ float QuadControl::YawControl(float yawCmd, float yaw)
   //   return a desired yaw rate [rad/s]
   // HINTS: 
   //  - use fmodf(foo,b) to unwrap a radian angle measure float foo to range [0,b]. 
-  //  - use the yaw control gain parameter kpYaw
+  //  - use the yaw control gain parameter kpYaw 
 
   float yawRateCmd=0;
   ////////////////////////////// BEGIN STUDENT CODE ///////////////////////////
+  /*
   if (yawCmd > 0) {
-	  yawCmd = fmodf(yawCmd, F_PI/2);
+	  yawCmd = fmodf(yawCmd, F_PI);
   }
   else {
-	  yawCmd = fmodf(yawCmd, -F_PI / 2);
+	  yawCmd = fmodf(yawCmd, -F_PI);
+  }
+  */
+  float yaw_err = yawCmd - yaw;
+  
+  
+  if (yaw_err > 0) {
+	  yaw_err = fmodf(yaw_err, F_PI);
+  }
+  else {
+	  yaw_err = fmodf(yaw_err, -F_PI);
   }
   
-  yawRateCmd = kpYaw * (yawCmd - yaw);
-  
-
+  yawRateCmd = kpYaw * yaw_err;
+	
 
   /////////////////////////////// END STUDENT CODE ////////////////////////////
 
